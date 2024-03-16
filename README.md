@@ -1,5 +1,5 @@
 # Sebastian...
-is a chat bot that summarizes the content of a user provided website. It can also hold a conversation with the user regarding the website content.
+is a chat bot that reads, summarizes, and talks about the content of a user provided website.
 
 **Commands:**
 !help - Displays this message
