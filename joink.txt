@@ -1,0 +1,195 @@
+import discord
+import requests
+import html2text
+import os
+import google.generativeai as genai
+genai.configure(api_key="AIzaSyCIvEgd0khhdZmwviOoT-OdXNVYrFNLj7g")
+
+# Set up the model
+generation_config = {
+  "temperature": 0,
+  "top_p": 1,
+  "top_k": 1,
+  "max_output_tokens": 2048,
+}
+
+safety_settings = [
+  {
+    "category": "HARM_CATEGORY_HARASSMENT",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+  {
+    "category": "HARM_CATEGORY_HATE_SPEECH",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+  {
+    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+  {
+    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+]
+
+model = genai.GenerativeModel(model_name="gemini-1.0-pro",
+                              generation_config=generation_config,
+                              safety_settings=safety_settings)
+def ask(messages):
+    history = []
+    final_message = messages[len(messages) - 1]
+    #remove the last message as it is the question
+    messages.pop()
+
+    #convert messages list to google api format
+    for i in range(len(messages)):
+        if i % 2 == 0:
+            history.append(
+                {
+                    'role': 'user',
+                    'parts': messages[i]
+                }
+            )
+        elif i % 2 == 1:
+            history.append(
+                {
+                    'role': 'model',
+                    'parts': messages[i]
+                }
+        )
+    try:
+        convo = model.start_chat(history=history)
+        convo.send_message(final_message)
+        return convo.last.text
+    except Exception as e:
+        print(f"Error: {e}")
+        return "Explicit content detected."
+
+# function to read websites
+
+from urllib.parse import urljoin, urlparse
+
+def is_valid_url(url):
+    """Check if the URL is valid and not an internal link."""
+    parsed = urlparse(url)
+    return bool(parsed.netloc) and bool(parsed.scheme)
+
+def scrape(url, depth=2, visited=None):
+    global processed_links_count
+    if visited is None:
+        visited = set()
+        processedlinkscount = 0  # Reset count for a new scrape call
+
+    # Avoid re-visiting URLs and stop at the desired depth
+    if url in visited or depth == 0:
+        return
+    visited.add(url)
+
+    # Fetch the HTML content from the URL
+    response = requests.get(url)
+    html_content = response.text
+
+    # Convert HTML to Markdown
+    textmaker = html2text.HTML2Text()
+    textmaker.ignorelinks = False
+    markdown_content = textmaker.handle(html_content)
+
+    # Define the output path for the markdown file
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(script_dir, 'output')
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    output_file_path = os.path.join(output_dir, "output.md")
+
+    # Append to the output file
+    with open(output_file_path, "a") as file:
+        file.write(f"Content from {url}:\n\n{markdown_content}\n\n")
+
+    print(f"Processed {url}")
+
+    # Limit the number of links processed
+    if depth > 1 and processed_links_count < 5:  # assuming a global limit of 5 links including the initial URL
+        for link in html_content.split('<a href=')[1:]:
+            full_url = link.split('">')[0].replace('"', '')
+            if is_valid_url(full_url):
+                processed_links_count += 1
+                if processed_links_count >= 5:  # Stop if the global limit is reached
+                    break
+                scrape(full_url, depth - 1, visited)
+
+#Discord code:
+
+# Define bot's intents/permissions
+intents = discord.Intents.default()
+intents.guilds = True
+intents.messages = True
+intents.message_content = True
+intents.reactions = True
+intents.members = True
+
+# Initialize the bot client with intents
+client = discord.Client(intents=intents)
+
+# Triggered when bot is ready
+@client.event
+async def on_ready():
+    print(f'Bot logged in as: {client.user}')
+
+context="" # The context of the conversation (all the websites read)
+messages=[] # The messages sent by the user and model
+thinking=False # Whether the bot is thinking or not to prevent multiple requests
+
+# Triggered when anyone sends a message
+@client.event
+async def on_message(message):
+    global context, messages, thinking
+    # If sender is bot, ignore it
+    if message.author == client.user:
+        return
+    
+    if thinking == True:   #stop multiple requests from fucking it up
+        return
+    thinking = True
+
+    # If message starts with 'hello', bot will respond:
+    if message.content=='!help':
+        await message.channel.send(f"""Hello {message.author.mention}! I'm Adapt, a wonderful Discord bot created to help you learn!
+
+**Commands:**
+**!help** - Displays this message
+**!read** https://website1.com  https://website2.com etc... - Reads websites seperated by spaces
+**!clear** - forgets the conversation and clears the websites read""")
+
+    # Any other message, bot will respond:
+    elif message.content.startswith('!read'):
+        # Split the message by spaces
+        message_contents = message.content.split(' ')
+        # Remove the first element (the command itself)
+        message_contents.pop(0)
+        # check if there are any links
+        if len(message_contents) == 0:
+            await message.channel.send(f'No links provided!!')
+        
+        # Loop through the links and read them
+        await message.channel.send(f"**Reading link(s)...** Please wait until I'm done reading >-<")
+        for link in message_contents:
+            text=scrape(link)
+            if(text==""):
+                await message.channel.send('**Invalid website!** Link must contain http or https.')
+            context+='\n\n\n'+text
+        await message.channel.send(f"**Done reading!**")
+    
+    elif message.content=='!clear':
+        context=""
+        messages=[]
+        await message.channel.send(f"Conversation and context cleared!")
+    else:
+        messages.append(message.content)
+        response=ask((["You are a helpful chatbot designed to answer questions given the context of the websites. Respond in markdown. Say \"Okay!\" if you understand.\nContext:\n"+context, "Okay!"]+messages[len(messages)-15:]))
+        messages.append(response)
+        await message.channel.send(response)
+
+    thinking = False #allow the bot to listen to new messages
+
+# Run the bot with your Discord bot token
+client.run('')
