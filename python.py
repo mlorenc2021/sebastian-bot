@@ -7,14 +7,34 @@ genai.configure(api_key="AIzaSyCIvEgd0khhdZmwviOoT-OdXNVYrFNLj7g")
 
 # Set up the model
 generation_config = {
-  "temperature": 0.9,
+  "temperature": 0,
   "top_p": 1,
   "top_k": 1,
   "max_output_tokens": 2048,
 }
 
-model = genai.GenerativeModel(model_name="gemini-1.0-pro", generation_config=generation_config)
+safety_settings = [
+  {
+    "category": "HARM_CATEGORY_HARASSMENT",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+  {
+    "category": "HARM_CATEGORY_HATE_SPEECH",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+  {
+    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+  {
+    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+    "threshold": "BLOCK_ONLY_HIGH"
+  },
+]
 
+model = genai.GenerativeModel(model_name="gemini-1.0-pro",
+                              generation_config=generation_config,
+                              safety_settings=safety_settings)
 def ask(messages):
     history = []
     final_message = messages[len(messages) - 1]
@@ -37,9 +57,13 @@ def ask(messages):
                     'parts': messages[i]
                 }
         )
-    convo = model.start_chat(history=history)
-    convo.send_message(final_message)
-    return convo.last.text
+    try:
+        convo = model.start_chat(history=history)
+        convo.send_message(final_message)
+        return convo.last.text
+    except Exception as e:
+        print(f"Error: {e}")
+        return "Explicit content detected."
 
 # function to read websites
 def scrape(url):
@@ -100,16 +124,20 @@ async def on_ready():
 
 context="" # The context of the conversation (all the websites read)
 messages=[] # The messages sent by the user and model
-chat=False # If the bot is in a conversation with the user
+thinking=False # Whether the bot is thinking or not to prevent multiple requests
 
 # Triggered when anyone sends a message
 @client.event
 async def on_message(message):
-    global context, messages, chat
+    global context, messages, thinking
     # If sender is bot, ignore it
     if message.author == client.user:
         return
     
+    if thinking == True:   #stop multiple requests from fucking it up
+        return
+    thinking = True
+
     # If message starts with 'hello', bot will respond:
     if message.content=='!help':
         await message.channel.send(f"""Hello {message.author.mention}! I'm Adapt, a wonderful Discord bot created to help you learn!
@@ -117,8 +145,7 @@ async def on_message(message):
 **Commands:**
 !help - Displays this message
 !read https://website1.com  https://website2.com, etc... - Reads websites seperated by spaces
-!talk - Starts a conversation with me
-!stop - Stops the conversation and clears the websites read""")
+!clear - forgets the conversation and clears the websites read""")
 
     # Any other message, bot will respond:
     elif message.content.startswith('!read'):
@@ -131,43 +158,22 @@ async def on_message(message):
             await message.channel.send(f'No links provided!!')
         
         # Loop through the links and read them
-        await message.channel.send(f"Reading link(s)... Please wait until I'm done reading >-<")
+        await message.channel.send(f"**Reading link(s)...** Please wait until I'm done reading >-<")
         for link in message_contents:
-            context+=scrape(link)
-        await message.channel.send(f"Done reading! Use !start chat if you haven't already!")
-
-    elif message.content=='!start':
-        await message.channel.send(f"Hello! You can ask me anything about what I've read now (:")
-        chat=True
+            context+='\n\n\n'+scrape(link)
+        await message.channel.send(f"**Done reading!**")
     
-    elif message.content=='!stop':
+    elif message.content=='!clear':
         context=""
         messages=[]
-        chat=False
-        await message.channel.send(f"Conversation stopped and context cleared!")
+        await message.channel.send(f"Conversation and context cleared!")
     else:
-        if chat:
-            messages.append(message.content)
-            response=ask((["You are a helpful chatbot designed to answer questions given the context of the websites. Always respond in markdown. Say \"Okay!\" if you understand.\nContext:"+context, "Okay!"]+messages))
-            messages.append(response)
-            await message.channel.send(response)
-        else:
-            await message.channel.send(f"Sorry, I'm not programmed to understand that command :(")
+        messages.append(message.content)
+        response=ask((["You are a helpful chatbot designed to answer questions given the context of the websites. Respond in markdown. Say \"Okay!\" if you understand.\nContext:\n"+context, "Okay!"]+messages[len(messages)-15:]))
+        messages.append(response)
+        await message.channel.send(response)
 
+    thinking = False #allow the bot to listen to new messages
 
-    #Con
-   import requests
-
-def get_cod_info(url="https://cod.edu"):
-  """Fetches information from the College of DuPage website."""
-  try:
-    response = requests.get(url)
-    response.raise_for_status()  # Raise error for non-200 status codes
-    # Process the response content (text or data) based on your needs
-    print(f"Successfully retrieved content from {url}")
-  except requests.exceptions.RequestException as e:
-    print(f"An error occurred: {e}")
-
-get_cod_info()  # Call the function
 # Run the bot with your Discord bot token
-client.run('MTIxNzIyMDcyNTQxMzUxMTI3OQ.GGraBf.lALO0KCRKpIjbo9GE1Th46spBKf2hy7PpMwOOs')
+client.run('token here')
