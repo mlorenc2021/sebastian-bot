@@ -1,4 +1,4 @@
-# Adapt
+# Sebastian
 Chat bot that summarizes the content of a user provided website.
 
 **Commands:**
