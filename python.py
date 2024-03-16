@@ -153,6 +153,21 @@ async def on_message(message):
             await message.channel.send(response)
         else:
             await message.channel.send(f"Sorry, I'm not programmed to understand that command :(")
-    
+
+
+    #Con
+   import requests
+
+def get_cod_info(url="https://cod.edu"):
+  """Fetches information from the College of DuPage website."""
+  try:
+    response = requests.get(url)
+    response.raise_for_status()  # Raise error for non-200 status codes
+    # Process the response content (text or data) based on your needs
+    print(f"Successfully retrieved content from {url}")
+  except requests.exceptions.RequestException as e:
+    print(f"An error occurred: {e}")
+
+get_cod_info()  # Call the function
 # Run the bot with your Discord bot token
 client.run('MTIxNzIyMDcyNTQxMzUxMTI3OQ.GGraBf.lALO0KCRKpIjbo9GE1Th46spBKf2hy7PpMwOOs')
