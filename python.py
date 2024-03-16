@@ -66,11 +66,11 @@ def ask(messages):
         return "Explicit content detected."
 
 # function to read websites
-def scrape(url):
+def scrape(url,depth=0):
     # check thoroughly if the link is valid
     if not url.startswith('http'):
         print(f"Invalid link: {url}")
-        return
+        return ""
     
     # Set up the paths relative to the script location
     # Gets the directory where the script is located
@@ -102,6 +102,8 @@ def scrape(url):
         file.write(markdown_content)
 
     print(f"Done! Your HTML has been converted and saved as a markdown file at {output_file_path}.")
+    if(markdown_content==""):
+        return "..."
     return markdown_content
 
 #Discord code:
@@ -143,9 +145,9 @@ async def on_message(message):
         await message.channel.send(f"""Hello {message.author.mention}! I'm Adapt, a wonderful Discord bot created to help you learn!
 
 **Commands:**
-!help - Displays this message
-!read https://website1.com  https://website2.com, etc... - Reads websites seperated by spaces
-!clear - forgets the conversation and clears the websites read""")
+**!help** - Displays this message
+**!read** https://website1.com  https://website2.com etc... - Reads websites seperated by spaces
+**!clear** - forgets the conversation and clears the websites read""")
 
     # Any other message, bot will respond:
     elif message.content.startswith('!read'):
@@ -160,7 +162,10 @@ async def on_message(message):
         # Loop through the links and read them
         await message.channel.send(f"**Reading link(s)...** Please wait until I'm done reading >-<")
         for link in message_contents:
-            context+='\n\n\n'+scrape(link)
+            text=scrape(link)
+            if(text==""):
+                await message.channel.send('**Invalid website!** Link must contain http or https.')
+            context+='\n\n\n'+text
         await message.channel.send(f"**Done reading!**")
     
     elif message.content=='!clear':
@@ -176,4 +181,4 @@ async def on_message(message):
     thinking = False #allow the bot to listen to new messages
 
 # Run the bot with your Discord bot token
-client.run('token here')
+client.run('')
