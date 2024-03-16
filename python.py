@@ -173,7 +173,7 @@ async def on_message(message):
         messages=[]
         await message.channel.send(f"Conversation and context cleared!")
     else:
-        messages.append(message.content)
+        messages.append(message.content+" ")
         response=ask((["You are a helpful chatbot designed to answer questions given the context of the websites. Respond in markdown. Say \"Okay!\" if you understand.\nContext:\n"+context, "Okay!"]+messages[len(messages)-15:]))
         messages.append(response)
         await message.channel.send(response)
